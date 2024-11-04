@@ -1,4 +1,5 @@
 import ContactInfo as cnt_info
+import json
 
 class User:
     def __init__(self, cpf, nome, domicilio, telefone, email, nascimento, senha, pacote_ativo):

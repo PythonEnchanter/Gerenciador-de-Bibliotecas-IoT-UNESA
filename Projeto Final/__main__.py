@@ -1,11 +1,9 @@
 import tkinter as tk
-from xmlrpc.client import boolean
-
 from PIL import Image, ImageTk
 import sqlite3 as db
 import Pacote, Admin, Livro, User, ContactInfo
 import serial as pyard
-from hashlib import sha1
+import hashlib
 
 #varíaveis relacionadas ao desenvolvimento do programa
 version = "0.1a"
@@ -25,7 +23,7 @@ class Sistema:
             db_cursor = db_comm.cursor()
 
             db_cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios
-                                 (cpf CHAR(10) PRIMARY KEY UNIQUE, nome VARCHAR(50), nascimento DATE, municipio VARCHAR(30), endereco VARCHAR(50), bairro VARCHAR(30), ddd INT, telefone INT, email VARCHAR(30))''')
+                                 (cpf CHAR(10) PRIMARY KEY UNIQUE, nome VARCHAR(50), nascimento DATE, municipio VARCHAR(30), endereco VARCHAR(50), bairro VARCHAR(30), ddd INT, telefone INT, email VARCHAR(30), password VARCHAR(60))''')
 
             db_cursor.execute('''CREATE TABLE IF NOT EXISTS livros
                                  (isbn VARCHAR(10) PRIMARY KEY UNIQUE, titulo VARCHAR(50), autor VARCHAR(50), editora VARCHAR(20), genero VARCHAR(20), qtd_paginas INT)''')
@@ -36,10 +34,76 @@ class Sistema:
 
     def iniciarAcessoDB(self, db_file):
         try:
-            db_comm = db.connect(db_file);
+            db_comm = db.connect(db_file)
         except Exception as e:
             print("Erro ao inicializar conexão com o Banco de Dados!\n")
         return db_comm
+
+    def enviaBD(field, data):
+        for i in range(len(data)):
+            data[i] = data[i].get()
+
+        if data[-1] != data[-2]:
+            pop = Popup("senha")
+            pop.dataError()
+        else:
+            pass
+
+        data.pop()
+        print(data[-2])
+        data[-1] = hashlib.sha256(data[-1].encode('utf-8')).hexdigest()
+        data_to_insert = [entry for entry in data]
+
+        db_comm = None
+        try:
+            db_comm = Sistema.iniciarAcessoDB(db_name, db_name)
+            db_cursor = db_comm.cursor()
+
+            db_cursor.execute("PRAGMA table_info(usuarios)")
+            print(db_cursor.fetchall())
+
+            for i in data: print(i)
+            placeholder = ", ".join("?" for _ in data_to_insert)
+            db_cursor.execute(f'''INSERT OR IGNORE INTO usuarios ({field})
+                                          VALUES ({placeholder})''', data_to_insert)
+
+            db_comm.commit()
+            db_comm.close()
+        except db.OperationalError as e:
+            print("Operational error:", e)
+        except db.IntegrityError as e:
+            print("Integrity error:", e)
+        except db.ProgrammingError as e:
+            print("Programming error:", e)
+        except db.DatabaseError as e:
+            print("Database error:", e)
+        except db.InterfaceError as e:
+            print("Interface error:", e)
+        except db.Error as e:
+            print("An SQLite error occurred:", e)
+        finally:
+            if db_comm:
+                db_comm.close()
+                print("Database connection closed.")
+
+        data.clear()
+        window = Window(root)
+        window.raiseTelaInicial()
+
+    def recebeDB(self, cpf):
+        db_comm = self.iniciarAcessoDB(db_name)
+        db_cursor = db_comm.cursor()
+
+        try:
+            db_cursor.execute(f'''SELECT * FROM usuarios WHERE cpf = ?''', (cpf,))
+            return db_cursor.fetchone()
+        except Exception as e:
+            print(e)
+        finally:
+            db_comm.close()
+
+    def deletarRegistroDB(self, cpf):
+        self.iniciarAcessoDB(db_name)
 
     def verifCredencial(self, senha):
         #verificação de credencial
@@ -54,22 +118,56 @@ class Sistema:
         pacote = Pacote.Pacote()
 
 class Popup:
-    def __init__(self):
+    def __init__(self, estilo):
         self.root = tk.Toplevel()
         self.window_xcoord = (self.root.winfo_screenwidth() // 2) - (150 // 2)
         self.window_ycoord = (self.root.winfo_screenheight() // 2) - (110 // 2)
         self.root.geometry(f"150x110+{self.window_xcoord}+{self.window_ycoord}")
         self.root.title("Aviso - BiblioSys")
 
+        if estilo == "fechar":
+            self.terminatePop()
+        elif estilo == "senha":
+            self.dataError()
+
+    def dataError(self):
+        self.label = tk.Label(self.root, text="As senhas não são iguais", wraplength=100)
+
+        self.continuar_btt = tk.Button(self.root,
+                                       text="Retornar",
+                                       bg="green",
+                                       relief=tk.RAISED,
+                                       foreground="white",
+                                       command=self.continuar,
+                                       cursor=cursor_hover,
+                                       width=8)
+
+        self.label.grid(row=0, column=0, columnspan=2, padx=30, pady=10, sticky=tk.W)
+        self.continuar_btt.grid(row=1, column=0, columnspan=1)
+
+    def terminatePop(self):
         self.label = tk.Label(self.root, text="Tem certeza que deseja finalizar o atendimento?", wraplength=100)
 
-        self.continuar_btt = tk.Button(self.root, text="Continuar", bg="green", relief=tk.RAISED, foreground="white", command=self.continuar, cursor=cursor_hover, width=8)
-        self.fechar_btt =  tk.Button(self.root, text="Sair", bg="red", relief=tk.RAISED, foreground="white", command=self.fechar, cursor=cursor_hover, width=8)
+        self.continuar_btt = tk.Button(self.root,
+                                       text="Continuar",
+                                       bg="green",
+                                       relief=tk.RAISED,
+                                       foreground="white",
+                                       command=self.continuar,
+                                       cursor=cursor_hover,
+                                       width=8)
+        self.fechar_btt = tk.Button(self.root,
+                                    text="Sair",
+                                    bg="red",
+                                    relief=tk.RAISED,
+                                    foreground="white",
+                                    command=self.fechar,
+                                    cursor=cursor_hover,
+                                    width=8)
 
         self.label.grid(row=0, column=0, columnspan=2, padx=30, pady=10, sticky=tk.W)
         self.continuar_btt.grid(row=1, column=0, columnspan=1)
         self.fechar_btt.grid(row=1, column=1, columnspan=1)
-
 
     def continuar(self):
         self.root.destroy()
@@ -105,7 +203,7 @@ class Window:
             self.front_img = ImageTk.PhotoImage(self.img.resize((600, 230)))
             self.front_img_label = tk.Label(self.tela_inicial, image=self.front_img, bg="#bbb", borderwidth=2, relief="raised")
         except FileNotFoundError:
-            self.front_img_label = tk.Label(self.tela_inicial, text="BiblioSys - Sistema de Gerenciamento de Bilbiotecas Físicas")
+            self.front_img_label = tk.Label(self.tela_inicial, text="BiblioSys - Sistema de Gerenciamento de Bibliotecas Físicas")
         self.front_img_label.grid(column=0, row=0, columnspan=4, sticky="sew", pady=25, padx=200)
         #>_______________________ imagem ______________________________<
 
@@ -121,17 +219,17 @@ class Window:
             if button == "cadastrar":
                 #tela de cadastro
                 self.tela_dados.tkraise()
-                self.setTelaDados()
+                self.setTelaDados("cadastro")
             elif button == "atualizar":
                 #verificação de credencial
                 #tela de cadastro com user
                 self.tela_dados.tkraise()
-                self.setTelaDados()
+                self.setTelaDados("atualizar")
             elif button == "consultar":
                 #tela de acervo
                 pass
             else:
-                pop = Popup()
+                pop = Popup("fechar")
                 pop.iniciar()
 
         btt_frame = tk.Frame(self.tela_inicial, bg="#bbb")
@@ -153,10 +251,10 @@ class Window:
         self.tela_inicial.tkraise()
         #X--------------------- PRIMEIRA TELA -------------------------x
 
-    def setTelaDados(self):
+    def setTelaDados(self, action):
         #X-------------------- TELA DE CREDENCIAL ---------------------x
         total_colunas = 0
-        fields = ["cpf", "nome", "nascimento", "municipio", "endereco", "bairro", "ddd", "telefone", "email"]
+        fields = ["cpf", "nome", "nascimento", "municipio", "endereco", "bairro", "ddd", "telefone", "email", "password"]
         data = []
         fields = ", ".join(fields)
 
@@ -198,68 +296,55 @@ class Window:
 
             total_colunas = column
 
-        def enviaBD(field, data):
-            data.pop()
-            data.pop()
-            data_to_insert = [entry.get() for entry in data]
-
-            try:
-                db_comm = Sistema.iniciarAcessoDB(self, db_name)
-                db_cursor = db_comm.cursor()
-
-                placeholder = ", ".join("?" for _ in data_to_insert)
-                db_cursor.execute(f'''INSERT OR IGNORE INTO usuarios ({fields})
-                                              VALUES ({placeholder})''', data_to_insert)
-
-                db_comm.commit()
-                db_comm.close()
-            except db.OperationalError as e:
-                print("Operational error:", e)
-            except db.IntegrityError as e:
-                print("Integrity error:", e)
-            except db.ProgrammingError as e:
-                print("Programming error:", e)
-            except db.DatabaseError as e:
-                print("Database error:", e)
-            except db.InterfaceError as e:
-                print("Interface error:", e)
-            except db.Error as e:
-                # Catch-all for any other sqlite3 errors
-                print("An SQLite error occurred:", e)
-            finally:
-                if db_comm:
-                    db_comm.close()
-                    print("Database connection closed.")
-
-            data.clear()
-            raiseTelaInicial()
-
-        def raiseTelaInicial():
-            self.tela_inicial.tkraise()
-
-        def raiseTelaDados(self):
-            self.tela_dados.tkraise()
-
-        cadastro_btt = tk.Button(self.tela_dados,
-                                 text="Cadastrar Usuário",
-                                 background="olive",
-                                 foreground="white",
-                                 command=lambda: enviaBD(fields, data),
-                                 width=15,
-                                 relief="groove",
-                                 cursor=cursor_hover)
-        cadastro_btt.grid(column=0, row=15, columnspan=2, padx=10)
+        if action == "cadastro":
+            cadastro_btt = tk.Button(self.tela_dados,
+                                     text="Cadastrar Usuário",
+                                     background="olive",
+                                     foreground="white",
+                                     command=lambda: Sistema.enviaBD(fields, data),
+                                     width=15,
+                                     relief="groove",
+                                     cursor=cursor_hover)
+            cadastro_btt.grid(column=0, row=15, columnspan=2, padx=10)
+        else:
+            delete_btt = tk.Button(self.tela_dados,
+                                   text="Deletar cadastro",
+                                   background="olive",
+                                   foreground="white",
+                                   command=lambda: Sistema.deletarRegistroDB(self, 1),
+                                   width=15,
+                                   relief="groove",
+                                   cursor=cursor_hover)
+            delete_btt.grid(column=0, row=15, columnspan=2, padx=10)
 
         fechar_btt = tk.Button(self.tela_dados,
                                text="Tela Inicial",
                                background="red",
                                foreground="white",
-                               command=lambda: raiseTelaInicial(),
+                               command=lambda: self.raiseTelaInicial(),
                                width=15,
                                relief="groove",
                                cursor=cursor_hover)
         fechar_btt.grid(column=2, row=15, columnspan=2, padx=10)
         #X-------------------- TELA DE CREDENCIAL ---------------------x
+
+    def raiseTelaInicial(self):
+        self.tela_inicial.tkraise()
+
+    def raiseTelaDados(self):
+        self.tela_dados.tkraise()
+
+    def AtualizarDados(self, cpf):
+        #função para abrir a tela de cadastro com os dados do usuário
+        '''Etapas:
+           0: Verificar credencial
+           1: Puxar dados do DB
+           2: Exibir dados nos fields
+           3: Proteger CPF e senha
+           3: Gerar botões de modificar e cancelar
+           4: Alterar dados no DB
+        '''
+        pass
 
 if __name__ == "__main__":
     sis = Sistema()
