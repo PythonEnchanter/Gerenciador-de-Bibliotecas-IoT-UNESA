@@ -468,6 +468,8 @@ class Window:
         button_frame.grid(column=0, row=1, columnspan=2, padx=10, sticky="nsew")
         coluna1_frame.grid_rowconfigure(0, weight=1)
         coluna1_frame.grid_columnconfigure(0, weight=1)
+        coluna2_frame.grid_rowconfigure(0, weight=1)
+        coluna2_frame.grid_columnconfigure(0, weight=1)
 
         #canvas interno de acervo_frame
         cv_book_selection = tk.Canvas(acervo_frame, bg="white")
@@ -475,22 +477,14 @@ class Window:
         v_scrollbar = tk.Scrollbar(acervo_frame, orient=tk.VERTICAL, command=cv_book_selection.yview, width=20)
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         cv_book_selection.configure(yscrollcommand=v_scrollbar.set)
-
         bookslct_frame = tk.Frame(cv_book_selection)
-
-        # Add the inner frame to the canvas
         cv_book_selection.create_window((0, 0), window=bookslct_frame, anchor="nw")
-
-
         acervo_button_list = []
-        # Populate the inner frame with some widgets (e.g., Labels)
         for i in range(5):
             for j in range(10):
-                btt = (tk.Button(bookslct_frame, text=f"Titulo {(i + 1) * (j + 1)}", width=15, height=10)
-                btt.grid(column=i, row=j, padx=9, pady=5, sticky="nsew"))
+                btt = tk.Button(bookslct_frame, text=f"Titulo {(i + 1) * (j + 1)}", width=15, height=10)
+                btt.grid(column=i, row=j, padx=9, pady=5, sticky="nsew")
                 acervo_button_list.append(btt)
-
-        # Update the scrollable region after adding widgets
         bookslct_frame.update_idletasks()
         cv_book_selection.config(scrollregion=cv_book_selection.bbox("all"))
 
@@ -502,9 +496,19 @@ class Window:
 
 
         #------------------------------btt-------------------------------#
-        emprestimo_btt = tk.Button(acervo_frame, text="Realizar pedido")
-        devolver_btt = tk.Button(acervo_frame, text="Devolução de livros")
-        consulta_btt = tk.Button(acervo_frame, text="Consultar pedido")
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+        button_frame.columnconfigure(2, weight=1)
+        button_frame.columnconfigure(3, weight=1)
+
+        emprestimo_btt = tk.Button(button_frame, text="Realizar pedido")
+        devolver_btt = tk.Button(button_frame, text="Devolução de livros")
+        consulta_btt = tk.Button(button_frame, text="Consultar pedido")
+        voltar_btt = tk.Button(button_frame, text="Tela Inicial")
+        emprestimo_btt.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        devolver_btt.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        consulta_btt.grid(row=1, column=0, sticky="nsew", padx=2, pady=2)
+        voltar_btt.grid(row=1, column=1, sticky="nsew", padx=2, pady=2)
 
     def raiseTelaInicial(self):
         self.tela_inicial.tkraise()
