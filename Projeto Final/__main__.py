@@ -5,6 +5,7 @@ import Pacote, Admin, Livro, ContactInfo
 from User import User
 import serial as pyard
 import hashlib
+import calendar, random
 
 #varíaveis relacionadas ao desenvolvimento do programa
 version = "0.1a"
@@ -20,6 +21,7 @@ window_width = 1000
 class Sistema:
     def __init__(self):
         self.user = None
+        self.pacote = None
         try:
             db_comm = db.connect(db_name)
             db_cursor = db_comm.cursor()
@@ -130,6 +132,7 @@ class Sistema:
             print(e)
             return None
         finally:
+            db_cursor.close()
             db_comm.close()
 
     def deletarRegistroDB(self, cpf):
@@ -142,6 +145,20 @@ class Sistema:
         except Exception as e:
             print("Erro")
             print(e)
+
+    def getLivroCoord(self, titulo):
+        db_comm = self.iniciarAcessoDB(db_name)
+        db_cursor = db_comm.cursor()
+
+        try:
+            db_cursor.execute('''SELECT xcoord, ycoord FROM livros_simples WHERE titulo = ?''', (titulo, ))
+            return db_cursor.fetchone()
+        except Exception as e:
+            print(e)
+            return None
+        finally:
+            db_cursor.close()
+            db_comm.close()
 
     def verifCredencial(self, cpf, senha):
         #verificação de credencial
@@ -161,9 +178,40 @@ class Sistema:
         #verificação de chave mestra
         pass
 
-    def efetuaPacote(self, livros):
-        #adiciona livros a um pacote por meio das hashs
-        pacote = Pacote.Pacote()
+    def conectarArduino(self):
+        sr_ard = pyard.Serial()
+        return sr_ard
+
+    def enviarDadosArduino(self):
+        #recebe uma tupla com pares de posições dos livros a serem coletados
+        ard = self.conectarArduino()
+        print(f"{self.user.lista_pedido}")
+        ard.write(sis.user.pedirEmprestimo())
+
+    def lorem(self, cnt, max_size):
+        # Common Lorem Ipsum phrases
+        lorem_phrases = [
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
+            "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+            "Curabitur pretium tincidunt lacus. Nulla gravida orci a odio.",
+            "Integer rutrum, orci vestibulum ullamcorper ultricies, lacus quam ultricies odio, vitae placerat pede sem sit amet enim.",
+            "Nam condimentum tincidunt nunc. Curabitur turpis.",
+            "Vestibulum sapien. Proin quam. Etiam ultrices.",
+            "Suspendisse in justo eu magna luctus suscipit.",
+        ]
+
+        # Generate the specified number of paragraphs
+        generated_text = ""
+        for _ in range(cnt):
+            # Select 3-6 random sentences to form a paragraph
+            paragraph = " ".join(random.choice(lorem_phrases) for _ in range(random.randint(1, max_size)))
+            generated_text += paragraph + "\n\n"  # Double newline for paragraph separation
+
+        return generated_text.strip()
+
 
 class Popup:
     def __init__(self, estilo):
@@ -405,7 +453,7 @@ class Window:
     def setTelaLogin(self, comando):
         def onButtonClick(button):
             if button.cget("text") == "Entrar":
-                print(f"cpf: {cpf_ety.get()} senha {senha_ety.get()}")
+                #print(f"cpf: {cpf_ety.get()} senha {senha_ety.get()}")
                 if self.sis.verifCredencial(cpf_ety.get(), senha_ety.get()):
                     if comando == "atualizar":
                         self.sis.instUser(cpf_ety.get())
@@ -448,9 +496,34 @@ class Window:
         voltar_btt.grid(column=4, row=2, columnspan=2, padx=10, pady=10)
 
     def setTelaAcervo(self):
-        def onButtonPress(button):
-            if button.cget("text") == "":
+        lista_livros = [None]
+
+        def onButtonPress(text):
+            if text == "Realizar pedido":
+                sis.enviarDadosArduino()
+            elif text == "Devolução de livros":
                 pass
+            elif text == "Consultar pedido":
+                #exibir os dados de info_pacote no frame userinf_frame
+                info_pacotes = []
+
+                for i in sis.user.lista_pacote:
+                    info_pacotes.append(i)
+            elif text == "Adicionar ao pedido":
+                livro = Livro.Livro(lista_livros[-1], sis.getLivroCoord(lista_livros[-1]))
+                self.sis.user.lista_pedido.append(livro) #alterar futuramente para que a adição na lista seja uma função interna de User
+                print(f"{self.sis.user.lista_pedido[-1]} adicionado ao pedido!\n")
+            else:
+                #entrar caso o usuário aperte para adicionar à lista de empréstimo
+                # 2 - Informações do livro selecionado aparecem em bookinf_frame
+                # 3 -
+                lista_livros.append(text.lower())
+                print("PUTA QUE PARIU")
+                bookinf_title_lbl.configure(text=f"{text}")
+                bookinf_book_lbl.configure(text=f"{text}") #puxar info do livro selecionado
+                userinf_data_lbl.config()
+
+
         #separador visual
         coluna1_frame = tk.Frame(self.tela_acervo, width=window_width * 0.7, height=600, bg='#bbb')
         coluna2_frame = tk.Frame(self.tela_acervo, width=window_width * 0.3, height=600, bg='#bbb')
@@ -466,11 +539,16 @@ class Window:
         bookinf_frame.grid(column=0, row=1, columnspan=2, padx=10, sticky="nsew")
         userinf_frame.grid(column=0, row=0, columnspan=2, padx=10, pady=10, sticky="nsew")
         button_frame.grid(column=0, row=1, columnspan=2, padx=10, sticky="nsew")
+
+        #Por algum motivo, as secções da tela de Acervo só ficam com o tamanho definido se essas linhas estiverem presente
+        acervo_frame.grid_propagate(False)
+        button_frame.grid_propagate(False)
         coluna1_frame.grid_rowconfigure(0, weight=1)
         coluna1_frame.grid_columnconfigure(0, weight=1)
         coluna2_frame.grid_rowconfigure(0, weight=1)
         coluna2_frame.grid_columnconfigure(0, weight=1)
 
+        #-----------------------------acervo-----------------------------#
         #canvas interno de acervo_frame
         cv_book_selection = tk.Canvas(acervo_frame, bg="white")
         cv_book_selection.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -482,33 +560,51 @@ class Window:
         acervo_button_list = []
         for i in range(5):
             for j in range(10):
-                btt = tk.Button(bookslct_frame, text=f"Titulo {(i + 1) * (j + 1)}", width=15, height=10)
+                btt = tk.Button(bookslct_frame, text=f"Titulo {(i+1)*(j+1)}", width=15, height=10, command=lambda: onButtonPress(f"Titulo {(i+1)*(j+1)}"))
                 btt.grid(column=i, row=j, padx=9, pady=5, sticky="nsew")
                 acervo_button_list.append(btt)
         bookslct_frame.update_idletasks()
         cv_book_selection.config(scrollregion=cv_book_selection.bbox("all"))
 
         acervo_title_lbl = tk.Label(acervo_frame, text="Listagem")
-        userinf_title_lbl = tk.Label(userinf_frame, text="Dados de Usuário")
-        bookinf_title_lbl = tk.Label(bookinf_frame, text="Dados do Livro")
+
+        # -----------------------------book-------------------------------#
+        bookinf_frame.grid_propagate(False)
+        bookinf_title_lbl = tk.Label(bookinf_frame, text=f"Livro Selecionado: {lista_livros[-1]}")
+        bookinf_book_lbl = tk.Label(bookinf_frame, text=f"Sobre o livro: {self.sis.lorem(1, 3)}", width=93, wraplength=600)
+        bookinf_title_lbl.grid(column=0, row=0, padx=10, pady=10, sticky="nsew")
+        bookinf_book_lbl.grid(column=0, row=1, padx=10, pady=10, sticky="nsew")
 
         #-----------------------------user-------------------------------#
+        userinf_frame.grid_propagate(False)
+        userinf_subframe1 = tk.Frame(userinf_frame, bg="#666", height=250)
+        userinf_subframe2 = tk.Frame(userinf_frame, bg="#666", height=40)
+        userinf_subframe1.grid_propagate(False)
+        userinf_subframe2.grid_propagate(False)
+        userinf_title_lbl = tk.Label(userinf_subframe1, text="Dados de Usuário: ", width=36)
+        userinf_data_lbl = tk.Label(userinf_subframe1, text=f"{self.sis.lorem(1, 1)}\n Livros no pacote: {lista_livros}", width=30, wraplength=250)
+        add_btt = tk.Button(userinf_subframe2, text="Adicionar ao pedido", command=lambda: onButtonPress("Adicionar ao pedido"))
+        rem_btt = tk.Button(userinf_subframe2, text="Remover do pedido", command=lambda: onButtonPress("Remover do pedido"))
 
+        userinf_subframe1.grid(column=0, row=0, sticky="nsew")
+        userinf_subframe2.grid(column=0, row=1, sticky="nsew")
+        userinf_frame.grid_rowconfigure(0, weight=1)
+        userinf_frame.grid_rowconfigure(1, weight=1)
+        userinf_frame.grid_columnconfigure(0, weight=1)
+        userinf_title_lbl.grid(column=0, row=0, padx=10, pady=10, sticky="nsew")
+        userinf_data_lbl.grid(column=0, row=1, padx=10, pady=10, sticky="nsew")
+        add_btt.grid(column=0, row=2, padx=10, pady=10, sticky="nsew")
+        rem_btt.grid(column=1, row=2, padx=10, pady=10, sticky="nsew")
 
         #------------------------------btt-------------------------------#
-        button_frame.columnconfigure(0, weight=1)
-        button_frame.columnconfigure(1, weight=1)
-        button_frame.columnconfigure(2, weight=1)
-        button_frame.columnconfigure(3, weight=1)
-
-        emprestimo_btt = tk.Button(button_frame, text="Realizar pedido")
-        devolver_btt = tk.Button(button_frame, text="Devolução de livros")
-        consulta_btt = tk.Button(button_frame, text="Consultar pedido")
-        voltar_btt = tk.Button(button_frame, text="Tela Inicial")
-        emprestimo_btt.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
-        devolver_btt.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
-        consulta_btt.grid(row=1, column=0, sticky="nsew", padx=2, pady=2)
-        voltar_btt.grid(row=1, column=1, sticky="nsew", padx=2, pady=2)
+        emprestimo_btt = tk.Button(button_frame, text="Realizar pedido", command=lambda: onButtonPress("Realizar pedido"))
+        devolver_btt = tk.Button(button_frame, text="Devolução de livros", command=lambda: onButtonPress("Devolução de livros"))
+        consulta_btt = tk.Button(button_frame, text="Consultar pedido", command=lambda: onButtonPress("Consultar pedido"))
+        voltar_btt = tk.Button(button_frame, text="Tela Inicial", command=lambda: onButtonPress("Tela Inicial"))
+        consulta_btt.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        emprestimo_btt.grid(row=0, column=3, sticky="ew", padx=2, pady=2)
+        devolver_btt.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        voltar_btt.grid(row=1, column=3, sticky="ew", padx=2, pady=2)
 
     def raiseTelaInicial(self):
         self.tela_inicial.tkraise()

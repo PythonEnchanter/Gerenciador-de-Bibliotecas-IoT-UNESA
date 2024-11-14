@@ -1,5 +1,6 @@
 import ContactInfo as cnt_info
-import json
+import Pacote
+#from Livro import
 
 class User:
     def __init__(self, cpf, nome, nascimento, domicilio, telefone, email):
@@ -9,12 +10,14 @@ class User:
         self.telefone = cnt_info.cellphoneNumber(telefone)
         self.email = cnt_info.enderecoEmail(email)
         self.nascimento = nascimento
+        self.pacote = None
 
-        lista_leitura = []
-        lista_desejo = []
-        lista_pacote = []
-        restrito = False
-        qtd_livros = 3
+        self.lista_pedido = [None]
+        self.lista_leitura = [] #livros emprestado e já devolvidos
+        self.lista_desejo = [] #livros que serão emprestados
+        self.lista_pacote = [] #pacotes de empréstimo ativos
+        self.restrito = False
+        self.qtd_livros = 3
 
     def cadastrar(self):
         #envia para o banco de dados
@@ -26,7 +29,7 @@ class User:
 
     def pedirEmprestimo(self):
         #executa o pacote de empréstimo pendente
-        pass
+        return self.lista_pedido
 
     def devolverLivros(self):
         #retorna os livros emprestados
