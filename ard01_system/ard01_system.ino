@@ -6,7 +6,7 @@
 #define BUZZER 11
 #define TRIG 2
 #define ECHO 3
-#define BTT1 13
+#define BTT1 9
 #define BTT2 12
 #define RED 8
 #define GREEN 7
@@ -14,12 +14,15 @@
 
 DHT dht(DHTXX, DHT11);
 
+//ambient variables
 int trackZeroDistance = 0;
+int stopButtonPress = 0;
+int restartButtonPress = 0;
+String systemStatus = "active";
 
 void setup(){
   Serial.begin(9600);
   
-  // Attach the servo to the defined pin
   pinMode(DHT11, OUTPUT);
   pinMode(TRIG, OUTPUT);
   pinMode(BUZZER, OUTPUT);
@@ -35,28 +38,45 @@ void setup(){
 
 void loop(){
   String python = "";
+  stopButtonPress = digitalRead(BTT2);
+  restartButtonPress = digitalRead(BTT1);
 
-  /*buzzerTone(BUZZER, 'R');
-  delay(2000);
-  delay(2000);
-  buzzerTone(BUZZER, ' ');*/
+  //pressedButton('R');
+
+  if(stopButtonPress == HIGH && systemStatus == "active"){
+    pressedButton('S');
+    delay(50);
+  } else if(restartButtonPress == HIGH && systemStatus == "inactive"){
+    pressedButton('R');
+    systemStatus = "active";
+    delay(50);
+  }
 
   if (Serial.available() > 0) {
     python = Serial.readStringUntil('\n');
-
+    
     if(python[0] == 'E'){
       buzzerTone(BUZZER, ' ');
       parseCoordinates(python);
+      if(checkBookPresence()){
+        Serial.print("Pedido transferido para o sistema interno.");
+      delay(100);
+      } else Serial.print("Aguarde mais alguns instantes!");
     } else if(python[0] == 'P'){
-      buzzerTone(BUZZER, 'S');
-      Serial.write("Sistema parado por administrador!");
+      //buzzerTone(BUZZER, 'S');
+      Serial.print("Sistema parado por administrador!");
+      delay(100);
       delay(30000);
     } else if(python[0] == 'R'){
-      buzzerTone(BUZZER, 'R');
-      Serial.write("Sistema funcionando normalmente!");
+      //buzzerTone(BUZZER, 'R');
+      Serial.print("Sistema funcionando normalmente!");
+      delay(100);
     } else if(python[0] == 'D'){
-      //parseCoordinates(python);
       buzzerTone(BUZZER, ' ');
+      Serial.print("Livros devolvidos!");
+    } else if(python[0] == 'I'){
+      String internalInfo = "Temp: " + String(retrieveTemperature()) + " " + "Hum: " + String(retrieveHumidity());
+      Serial.print(internalInfo);
     }
   }
 }
@@ -85,7 +105,7 @@ void parseCoordinates(String data){
     startIndex = semiColonIndex + 1;
   }
 
-  // Example: Print parsed coordinates
+
   for (int i = 0; i < coordIndex; i++) {
     Serial.print("X: ");
     Serial.print(coordinates[i][0]);
@@ -131,7 +151,12 @@ int soundSensor(int trig,int echo){
   return pulseIn(echo, HIGH)/58;
 }
 
-void pressedButton(){
+void pressedButton(char btt){
+  if(btt == 'S'){
+      forcedStop();
+  } else {
+    returnAction();
+  }
 }
 
 float retrieveHumidity(){
@@ -148,32 +173,35 @@ void returnAction(){
   //buzzer avisa 1 segundo
   //led verde pisca 3 vezes e rbg desliga
   //as ações travadas voltam em fila
+  //buzzerTone(BUZZER, 'R');
+  turnLedOn(GREEN, 'P');
+  turnLedOn(GREEN, 'C');
+  turnLedOn(CLEAR, 'C');
+  Serial.println("Sistema em funcionamento! Operações em fila serão executadas.");
 }
 
+//S - Stop; R - Restart;
 void buzzerTone(int buzzerPin, char action){
   //crescente para parada, decrescente para retomada
-  int startStopTiming[3] = {500, 500, 2000};
+  int startStopTiming[3] = {500, 500, 1000};
   int startStop[3] = {400, 400, 100};
 
-  int deliveryTiming[] = {500, 500, 500, 500, 250, 50, 50, 2000};
+  int deliveryTiming[] = {500, 500, 500, 500, 250, 50, 50, 1000};
   int delivery[] = {400, 200, 400, 200, 800, 800, 800, 800};
 
   if(action == 'S'){
     for(int i=0;i<sizeof(startStop)/sizeof(startStop[0]);i++){
       tone(buzzerPin, startStop[i], startStopTiming[i]);
-      //Serial.println(startStop[i]);
       delay(500);
     }
   } else if (action == 'R'){
     for(int i=sizeof(startStop)/sizeof(startStop[0]);i>0;i--){
       tone(buzzerPin, startStop[i], startStopTiming[i]);
-      //Serial.println(startStop[i]);
       delay(500);
     }
   } else {
     for(int i=0;i<sizeof(delivery)/sizeof(delivery[0]);i++){
       tone(buzzerPin, delivery[i], deliveryTiming[i]);
-      Serial.println("Pedido transferido para o sistema interno.");
       delay(500);
     }
   }
@@ -183,17 +211,24 @@ void buzzerTone(int buzzerPin, char action){
 void turnLedOn(int LEDPin, char action){
   if(action=='C'){
     digitalWrite(LEDPin, HIGH);
-  } else {
-    digitalWrite(LEDPin, HIGH);
-    delay(500);
-    digitalWrite(LEDPin, LOW);
-    delay(500);
+    delay(50);
+  } else{
+    for(int i=0;i<3;i++){
+      digitalWrite(LEDPin, HIGH);
+      delay(50);
+      digitalWrite(LEDPin, LOW);
+      delay(50);
+    }
   }
 }
 
 void forcedStop(){
   //buzzer avisa 3 segundos
-  //garra abre
   //led vermelho liga e rgb pisca
+  //buzzerTone(BUZZER, 'S');
   Serial.println("System freeze! Todas as operações postas em fila.");
+
+  while(restartButtonPress == LOW){
+    delay(10);
+  }
 }

@@ -16,29 +16,13 @@ class Connection:
         self.ard_conn = None
 
         try:
-            self.ard_conn = pyard.Serial(port=porta, baudrate=faixa, timeout=1)
+            self.ard_conn = pyard.Serial(port=porta, baudrate=faixa, timeout=5)
         except Exception as e:
             print(f"Erro de conexão... {e}")
 
-        '''self.thread1 = threading.Thread(target=self.retrieveArdData)
+        self.thread1 = threading.Thread(target=self.retrieveArdData)
         self.thread1.daemon = True
-        self.thread1.start()'''
-
-    #ISSO DEVE SER USADO NO ARDUINO
-    '''def processar_dado(self, dado):
-        tipo, valor = dado.split(':')
-        tipo, message = tipo.split(';')
-        
-        #isso deve ser usado no arduino
-        if tipo == 'T':
-            print("Temperatura:", valor)
-        elif tipo == 'H':
-            print("Umidade:", valor)
-        elif tipo == 'P':
-            if message == 'M':
-                pass
-        elif tipo == 'S':
-            self.sendUserData(valor)'''
+        self.thread1.start()
 
     def requireStatusData(self):
         data_received = None
@@ -60,25 +44,27 @@ class Connection:
                 self.ard_conn.write(data)
                 return True
             except Exception as e:
-                print(e)
+                print(f"Exception: {e}")
                 return False
 
     def retrieveArdData(self):
         if self.ard_conn is None:
             print("Arduino não conectado!")
-            return False
+            return []
         else:
             data_buffer = []
+
             try:
+                #print(f"Checking in_waiting: {self.ard_conn.in_waiting}")
                 while self.ard_conn.in_waiting > 0:
                     print("WAITING")
-                    ard_data = self.ard_conn.readline().decode('utf-8').strip()
+                    ard_data = self.ard_conn.readline().strip()
                     data_buffer.append(ard_data)
-                return data_buffer if data_buffer else None
+                return data_buffer
             except Exception as e:
                 print("err2")
                 print(f"Dados não recebidos: {e}")
-                return False
+                return []
 
 class Window:
     def __init__(self, root):
@@ -130,15 +116,17 @@ class Window:
         entrar_btt = tk.Button(self.frame1, text="Entrar", command=lambda: self.OnButtonClick("Entrar"), width=15)
         pedido_btt = tk.Button(self.frame3, text="Realizar Pedido", command=lambda: self.OnButtonClick("Realizar Pedido"), width=15)
         parada_btt = tk.Button(self.frame3, text="Parar Operação", command=lambda: self.OnButtonClick("Parar Operação"), width=15)
-        retomar_btt = tk.Button(self.frame3, text="Retomar Operação", command=lambda: self.OnButtonClick("Retomar Operação"), width=15)
+        retomar_btt = tk.Button(self.frame3, text="Retomar Operação", command=lambda: self.OnButtonClick("Retomar Operação"),width=15)
+        dadosdht_btt = tk.Button(self.frame3, text="Dados internos", command=lambda: self.OnButtonClick("Dados internos"),width=15)
         devolver_btt = tk.Button(self.frame3, text="Devolução de Livros", command=lambda: self.OnButtonClick("Devolução de Livros"), width=15)
         self.user_btts.extend([pedido_btt, devolver_btt])
-        self.adm_btts.extend([parada_btt, retomar_btt])
+        self.adm_btts.extend([parada_btt, retomar_btt, dadosdht_btt])
         entrar_btt.grid(column=3, row=0)
         pedido_btt.grid(column=1, row=1, columnspan=2)
         parada_btt.grid(column=1, row=7, columnspan=2)
         retomar_btt.grid(column=3, row=7, columnspan=2)
         devolver_btt.grid(column=3, row=1, columnspan=2)
+        dadosdht_btt.grid(column=2, row=8, columnspan=2)
 
         self.booklog_text = tk.Text(self.frame4, wrap=tk.WORD, state="disabled", width=34, height=7, bg="white")
         self.userlog_text = tk.Text(self.frame5, wrap=tk.WORD, state="disabled", width=34, height=9, bg="white")
@@ -189,6 +177,8 @@ class Window:
             i.configure(state="active")
 
     def OnButtonClick(self, text):
+        ard_return = ard_conn.retrieveArdData()
+
         if text == "Entrar":
             if self.id_entry.get() == "user":
                 self.enableButtons(self.user_btts)
@@ -204,36 +194,40 @@ class Window:
             print(self.lista_user)
             if not self.lista_user:
                 self.update_log(self.userlog_text, "\nNenhum livro selecionado!", False)
+
+            livros_user_coords = []
+            envio_coord = None
+
+            self.lista_user = list(set(self.lista_user)) #retira duplicatas
+            for i in self.lista_user: #separa as coordenadas dos livros selecionados
+                livros_user_coords.append(self.lista_coords[self.lista_livros.index(i)])
+            print(f">>>  E:{livros_user_coords}".encode('utf-8'))
+            envio_coord = ";".join([f"{x}{y}" for x, y in livros_user_coords])
+            if ard_conn.sendUserData(f"E:{envio_coord}".encode('utf-8')):
+                if ard_return == False:
+                    print("ERRO ARDUINO");
+
+                self.update_log(self.userlog_text, ard_return, False)
+                self.update_log(self.booklog_text, f"{self.lista_user}\nTotal de livros: {len(self.lista_user)}\nAguarde a entrega do seu pedido!", True)
             else:
-                livros_user_coords = []
-                envio_coord = None
-
-                self.lista_user = list(set(self.lista_user)) #retira duplicatas
-                for i in self.lista_user: #separa as coordenadas dos livros selecionados
-                    livros_user_coords.append(self.lista_coords[self.lista_livros.index(i)])
-                print(f">>>  E:{livros_user_coords}".encode('utf-8'))
-                envio_coord = ";".join([f"{x}{y}" for x, y in livros_user_coords])
-                if ard_conn.sendUserData(f"E:{envio_coord}".encode('utf-8')):
-
-                    ard_return = ard_conn.retrieveArdData()
-                    if ard_return == False:
-                        pass
-
-                    self.update_log(self.userlog_text, ard_return.decode('utf-8'), False)
-                    self.update_log(self.booklog_text, f"{self.lista_user}\nTotal de livros: {len(self.lista_user)}\nAguarde a entrega do seu pedido!", True)
-                    self.update_log(self.userlog_text, )
-                else:
-                    self.update_log(self.booklog_text, f"Livros selecionados:\n{self.lista_user}", True)
-                    self.update_log(self.booklog_text, "Seu pedido será efetuado futuramente...", False)
-                sleep(0.1)
-                print(f" Arduino: {ard_conn.retrieveArdData()}")
+                self.update_log(self.booklog_text, f"Livros selecionados:\n{self.lista_user}", True)
+                self.update_log(self.booklog_text, "Seu pedido será efetuado futuramente...", False)
+            sleep(0.1)
+            print(f" Arduino: {ard_conn.retrieveArdData()}")
         elif text == "Parar Operação":
-            ard_conn.sendUserData(["P"])
+            ard_conn.sendUserData("P".encode("utf-8"))
+            self.update_log(self.userlog_text, ard_return, False)
         elif text == "Retomar Operação":
-            ard_conn.sendUserData(["R"])
+            ard_conn.sendUserData("R".encode("utf-8"))
+            self.update_log(self.userlog_text, ard_return, False)
+        elif text == "Dados internos":
+            ard_conn.sendUserData("I".encode("utf-8"))
+            self.update_log(self.userlog_text, ard_return, True)
         elif text == "Devolução de Livros":
             self.update_log(self.userlog_text, "\nPor favor, coloque os livros na esteira.", False)
             ard_conn.sendUserData(["D"])
+            self.update_log(self.booklog_text, "", True)
+            self.update_log(self.userlog_text, ard_return, False)
         else:
             self.lista_user.append(text)
             self.update_log(self.booklog_text, f"Livros selecionados:\n{self.lista_user}", True)
@@ -249,7 +243,7 @@ class Window:
         log_widget.insert(tk.END, f"\n{message}")
         log_widget.config(state="disabled")
 
-        self.saveToLogFile(f"{self.getTime()} || Objeto: " + str(log_widget) + ": " + message + "\n")
+        self.saveToLogFile(f"{self.getTime()} || Objeto: " + str(log_widget) + ": " + str(message) + "\n")
 
     def hashEntry(self, entry):
         return hashlib.sha256(str(entry).encode('utf-8')).hexdigest()
